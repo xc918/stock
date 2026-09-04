@@ -70,7 +70,7 @@ jobs:
         run: python send_email.py $(tr '\n' ' ' < out/paths.txt)
 
       - name: Upload brief as workflow artifact
-        if: steps.gate.outputs.run == 'true'
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: brief-${{ steps.gate.outputs.slot }}

@@ -1,7 +1,8 @@
 {
   "_comment": "Watchlists and tuning. Holdings live in the HOLDINGS_CSV repo secret, not in this repo.",
-  "watchlist_main": ["MU", "ASML", "MRVL", "APH", "AMAT", "NVT", "LFUS", "ORCL", "COHR", "CIEN", "GLW", "MP"],
-  "watchlist_secondary": ["IONQ", "PLTR", "AAOI", "ADSK", "MNDY", "VKTX"],
+  "watchlist_focus": ["PLTR", "NBIS", "IREN", "COHR", "CIEN", "RKLB", "VERA", "RGTI", "SERV", "UMAC", "LUNR", "NNE"],
+  "watchlist_general": ["AXTI", "GLW", "LITE", "BE", "FLNC", "NUCL", "CCJ", "QBTS", "QNTM", "CRS", "ATI", "CF", "NTR", "MOS", "IOT", "CDNS", "RUN", "AMAT", "ALGM", "AADX", "CYTK", "DPC", "ABVX", "INTC", "TSM", "MRVL", "QCOM", "NOW", "DELL", "ESTC", "FCEL", "FLYW", "BMBL"],
+  "watchlist_recent": ["ALAB", "AMKR", "AEHR", "VPG", "RDW"],
   "market_context": ["SPY", "QQQ", "IWM", "SMH", "XLK", "XLF", "XLE", "^VIX"],
   "macro": ["^IRX", "^FVX", "^TNX", "^TYX", "DX-Y.NYB", "CL=F", "GC=F", "BTC-USD"],
   "screens": ["day_gainers", "day_losers", "most_actives"],

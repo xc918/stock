@@ -1,0 +1,14 @@
+{
+  "_comment": "Watchlists and tuning. Holdings live in the HOLDINGS_CSV repo secret, not in this repo.",
+  "watchlist_main": ["MU", "ASML", "MRVL", "APH", "AMAT", "NVT", "LFUS", "ORCL", "COHR", "CIEN", "GLW", "MP"],
+  "watchlist_secondary": ["IONQ", "PLTR", "AAOI", "ADSK", "MNDY", "VKTX"],
+  "market_context": ["SPY", "QQQ", "IWM", "SMH", "XLK", "XLF", "XLE", "^VIX"],
+  "macro": ["^IRX", "^FVX", "^TNX", "^TYX", "DX-Y.NYB", "CL=F", "GC=F", "BTC-USD"],
+  "screens": ["day_gainers", "day_losers", "most_actives"],
+  "screen_count": 15,
+  "big_move_pct": 3.0,
+  "news_per_ticker": 4,
+  "earnings_horizon_days": 30,
+  "deep_earnings_window_days": 14,
+  "email_subject_prefix": "Market Brief"
+}

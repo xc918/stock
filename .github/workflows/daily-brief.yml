@@ -1,0 +1,78 @@
+name: Market Brief
+
+on:
+  schedule:
+    # Each slot is scheduled twice: the first cron is 9:30/12:00/14:30 ET during
+    # EDT, the second during EST. should_run.py keeps whichever one is correct
+    # today, so the schedule survives both DST switches.
+    - cron: "30 13 * * 1-5"   # 9:30 ET (EDT)
+    - cron: "30 14 * * 1-5"   # 9:30 ET (EST)
+    - cron: "0 16 * * 1-5"    # 12:00 ET (EDT)
+    - cron: "0 17 * * 1-5"    # 12:00 ET (EST)
+    - cron: "30 18 * * 1-5"   # 14:30 ET (EDT)
+    - cron: "30 19 * * 1-5"   # 14:30 ET (EST)
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "Which brief to build"
+        type: choice
+        options: [open, midday, afternoon]
+        default: open
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Decide whether this firing is a real slot
+        id: gate
+        run: |
+          ARGS=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ARGS="--force --slot=${{ inputs.slot }}"
+          fi
+          if OUTPUT=$(python should_run.py $ARGS); then
+            echo "$OUTPUT"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "$OUTPUT" | grep '^SLOT=' | sed 's/^SLOT=/slot=/' >> "$GITHUB_OUTPUT"
+            echo "$OUTPUT" | grep '^MODE=' | sed 's/^MODE=/mode=/' >> "$GITHUB_OUTPUT"
+          else
+            echo "$OUTPUT"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Generate brief
+        if: steps.gate.outputs.run == 'true'
+        env:
+          SLOT: ${{ steps.gate.outputs.slot }}
+          MODE: ${{ steps.gate.outputs.mode }}
+          HOLDINGS_CSV: ${{ secrets.HOLDINGS_CSV }}
+        run: python brief.py
+
+      - name: Email brief
+        if: steps.gate.outputs.run == 'true'
+        env:
+          YAHOO_USER: ${{ secrets.YAHOO_USER }}
+          YAHOO_APP_PASSWORD: ${{ secrets.YAHOO_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          SLOT: ${{ steps.gate.outputs.slot }}
+        run: python send_email.py $(tr '\n' ' ' < out/paths.txt)
+
+      - name: Upload brief as workflow artifact
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: brief-${{ steps.gate.outputs.slot }}
+          path: out/
+          retention-days: 30

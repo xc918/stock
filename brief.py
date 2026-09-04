@@ -82,7 +82,8 @@ def table(header, rows):
 
 # ---------- collection ----------
 
-def collect(tickers, mode, deep_tickers=(), news_tickers=(), news_per_ticker=4):
+def collect(tickers, mode, deep_tickers=(), news_tickers=(), news_per_ticker=4,
+            deep_group=None):
     daily = fetch.download_daily(tickers)
     intra = fetch.download_intraday(tickers)
     rows = {}
@@ -94,7 +95,7 @@ def collect(tickers, mode, deep_tickers=(), news_tickers=(), news_per_ticker=4):
         row = fetch.price_block(ticker, frame, intra.get(ticker))
         obj = yf.Ticker(ticker)
         row["earnings"] = fetch.earnings_date(obj)
-        if mode == "full":
+        if mode == "full" and (deep_group is None or ticker in deep_group):
             row.update(fetch.fundamentals(obj))
             row.update(fetch.analyst(obj, row["price"]))
         if ticker in deep_tickers:
@@ -290,14 +291,20 @@ def breadth_line(rows, tickers):
 def build(config, holdings, slot="open", mode="full", collector=collect,
           screener=fetch.run_screen):
     held = [h["ticker"] for h in holdings]
-    main = config["watchlist_main"]
-    secondary = config["watchlist_secondary"]
+    focus = config["watchlist_focus"]
+    general = config["watchlist_general"]
+    recent = config["watchlist_recent"]
     context = config["market_context"]
     macro = config["macro"]
     big_move = config["big_move_pct"]
 
-    equities = list(dict.fromkeys(held + main + secondary))
-    rows = collector(equities, mode)
+    # Fundamentals, analyst targets and short interest are pulled only for these.
+    # The general watchlist is quotes and technicals only, to keep the run inside
+    # Yahoo's rate limits.
+    deep_group = list(dict.fromkeys(held + focus + recent))
+
+    equities = list(dict.fromkeys(held + focus + recent + general))
+    rows = collector(equities, mode, deep_group=deep_group)
 
     deep = set()
     news = set()
@@ -308,7 +315,8 @@ def build(config, holdings, slot="open", mode="full", collector=collect,
         news = pick_news_tickers(rows, [], big_move)
     if deep or news:
         extra = collector(sorted(deep | news), mode, deep_tickers=deep,
-                          news_tickers=news, news_per_ticker=config["news_per_ticker"])
+                          news_tickers=news, news_per_ticker=config["news_per_ticker"],
+                          deep_group=deep_group)
         for ticker, row in extra.items():
             rows.setdefault(ticker, row).update(row)
 
@@ -322,7 +330,8 @@ def build(config, holdings, slot="open", mode="full", collector=collect,
     for ticker in equities:
         if ticker in rows:
             rows[ticker]["group"] = ("holding" if ticker in held else
-                                     "main" if ticker in main else "secondary")
+                                     "focus" if ticker in focus else
+                                     "recent" if ticker in recent else "general")
     for ticker in context + macro:
         if ticker in rows:
             rows[ticker]["group"] = "context"
@@ -347,27 +356,31 @@ def build(config, holdings, slot="open", mode="full", collector=collect,
         "## 3. Holdings",
         holdings_md,
         "",
-        "## 4. Main watchlist",
-        table(QUOTE_HEADER, quote_rows(rows, main)),
+        "## 4. Focus watchlist (重点观察)",
+        table(QUOTE_HEADER, quote_rows(rows, focus)),
         "",
-        "## 5. Secondary / speculative watchlist",
-        table(QUOTE_HEADER, quote_rows(rows, secondary)),
+        "## 5. Recent additions (近期新增)",
+        table(QUOTE_HEADER, quote_rows(rows, recent)),
         "",
-        f"## 6. Notable moves (>= {big_move:.0f}%)",
+        "## 6. General watchlist (一般观察)",
+        table(QUOTE_HEADER, quote_rows(rows, general)),
+        "",
+        f"## 7. Notable moves (>= {big_move:.0f}%)",
         movers_section({t: rows[t] for t in equities if t in rows}, big_move),
         "",
     ]
 
-    section = 7
+    section = 8
     if mode == "full":
-        parts += [f"## {section}. Valuation, growth and margins",
-                  fundamentals_section(rows, equities), ""]
+        parts += [f"## {section}. Valuation, growth and margins "
+                  f"(holdings, focus and recent only)",
+                  fundamentals_section(rows, deep_group), ""]
         section += 1
         parts += [f"## {section}. Analyst targets and rating trend",
-                  analyst_section(rows, equities), ""]
+                  analyst_section(rows, deep_group), ""]
         section += 1
         parts += [f"## {section}. Short interest",
-                  short_interest_section(rows, equities), ""]
+                  short_interest_section(rows, deep_group), ""]
         section += 1
 
     parts += [f"## {section}. Earnings within {config['earnings_horizon_days']} days",

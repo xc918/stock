@@ -2,15 +2,17 @@ name: Market Brief
 
 on:
   schedule:
-    # Each slot is scheduled twice: the first cron is 9:30/12:00/14:30 ET during
-    # EDT, the second during EST. should_run.py keeps whichever one is correct
-    # today, so the schedule survives both DST switches.
-    - cron: "30 13 * * 1-5"   # 9:30 ET (EDT)
-    - cron: "30 14 * * 1-5"   # 9:30 ET (EST)
-    - cron: "0 16 * * 1-5"    # 12:00 ET (EDT)
-    - cron: "0 17 * * 1-5"    # 12:00 ET (EST)
-    - cron: "30 18 * * 1-5"   # 14:30 ET (EDT)
-    - cron: "30 19 * * 1-5"   # 14:30 ET (EST)
+    # Every slot is scheduled twice — the first cron hits it during EDT, the
+    # second during EST. With a 90-minute tolerance either firing can serve the
+    # slot, and the state/ marker stops the second one sending a duplicate.
+    # GitHub drops scheduled firings under load, so the spare is the backup.
+    - cron: "30 13 * * 1-5"   # 9:30 ET (EDT)   / 8:30 ET (EST)
+    - cron: "30 14 * * 1-5"   # 10:30 ET (EDT)  / 9:30 ET (EST)
+    - cron: "0 16 * * 1-5"    # 12:00 ET (EDT)  / 11:00 ET (EST)
+    - cron: "0 17 * * 1-5"    # 13:00 ET (EDT)  / 12:00 ET (EST)
+    - cron: "30 18 * * 1-5"   # 14:30 ET (EDT)  / 13:30 ET (EST)
+    - cron: "30 19 * * 1-5"   # 15:30 ET (EDT)  / 14:30 ET (EST)
+    - cron: "0 21 * * 1-5"    # 17:00 ET (EDT, inert) / 16:00 ET (EST backup)
   workflow_dispatch:
     inputs:
       slot:
@@ -18,6 +20,13 @@ on:
         type: choice
         options: [open, midday, afternoon]
         default: open
+
+permissions:
+  contents: write
+
+concurrency:
+  group: market-brief
+  cancel-in-progress: false
 
 jobs:
   brief:
@@ -36,7 +45,7 @@ jobs:
         run: |
           ARGS=""
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ARGS="--force --slot=${{ inputs.slot }}"
+            ARGS="--force --slot=${{ github.event.inputs.slot || 'open' }}"
           fi
           if OUTPUT=$(python should_run.py $ARGS); then
             echo "$OUTPUT"
@@ -69,10 +78,24 @@ jobs:
           SLOT: ${{ steps.gate.outputs.slot }}
         run: python send_email.py $(tr '\n' ' ' < out/paths.txt)
 
+      # Records that this slot went out today, so the backup firing an hour
+      # later skips instead of sending a duplicate. Only after a successful
+      # send — a failed email leaves no marker, so the backup will retry.
+      - name: Record that this slot was sent
+        if: steps.gate.outputs.run == 'true' && github.event_name == 'schedule'
+        run: |
+          python should_run.py --mark --slot=${{ steps.gate.outputs.slot }}
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/
+          git commit -m "sent ${{ steps.gate.outputs.slot }} brief [skip ci]" || exit 0
+          git pull --rebase --autostash origin main
+          git push
+
       - name: Upload brief as workflow artifact
         if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: brief-${{ steps.gate.outputs.slot }}
+          name: brief-${{ steps.gate.outputs.slot }}-${{ github.run_id }}
           path: out/
           retention-days: 30

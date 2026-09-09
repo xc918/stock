@@ -47,7 +47,7 @@ Fundamentals are only in the 9:30 brief because they don't change intraday.
 
 ## What's in the full brief
 
-Market context (SPY/QQQ/IWM/SMH/XLK/XLF/XLE/VIX) and macro (3M/5Y/10Y/30Y yields, DXY, crude, gold, BTC). Holdings with day P/L, unrealized P/L and portfolio totals. Main and secondary watchlists. Per-name technicals: change vs prior close **and** vs today's open, RVOL, RSI-14, ATR%, distance from 52-week high, 20/50/200-day SMA. Breadth line across everything tracked. Movers ≥3%. Valuation/growth/margins. Analyst mean target, upside, and how the buy/hold/sell split shifted over three months. Short interest, % of float, days-to-cover, month-over-month change. Earnings within 30 days — and for anything reporting inside 14 days, the front-month implied vol, implied move, put/call volume ratio, and last four quarters of EPS beats/misses. Yahoo's day gainers / day losers / most actives. Headlines for holdings and any ±3% mover.
+Market context (SPY/QQQ/IWM/SMH/XLK/XLF/XLE/VIX) and macro (3M/5Y/10Y/30Y yields, DXY, crude, gold, BTC). Holdings with day P/L, unrealized P/L and portfolio totals. Focus (重点观察), recent additions (近期新增) and general (一般观察) watchlists. Valuation, analyst and short-interest tables cover holdings + focus + recent only, to stay inside Yahoo's rate limits. Per-name technicals: change vs prior close **and** vs today's open, RVOL, RSI-14, ATR%, distance from 52-week high, 20/50/200-day SMA. Breadth line across everything tracked. Movers ≥3%. Valuation/growth/margins. Analyst mean target, upside, and how the buy/hold/sell split shifted over three months. Short interest, % of float, days-to-cover, month-over-month change. Earnings within 30 days — and for anything reporting inside 14 days, the front-month implied vol, implied move, put/call volume ratio, and last four quarters of EPS beats/misses. Yahoo's day gainers / day losers / most actives. Headlines for holdings and any ±3% mover.
 
 ## Files
 
@@ -55,12 +55,14 @@ Market context (SPY/QQQ/IWM/SMH/XLK/XLF/XLE/VIX) and macro (3M/5Y/10Y/30Y yields
 - `fetch.py` — data layer; every call degrades to `—` rather than failing the run
 - `send_email.py` — Yahoo SMTP over SSL, port 465
 - `should_run.py` — slot gate: DST, weekends, NYSE holidays
-- `config.json` — watchlists, macro symbols, screens, thresholds
+- `config.json` — watchlist_focus, watchlist_general, watchlist_recent, macro symbols, screens, thresholds
 - `holdings.example.csv` — template only; the real one lives in the `HOLDINGS_CSV` secret
 
 ## Notes
 
-- GitHub cron is UTC-only and fires late under load, so every slot is scheduled twice (EDT and EST offsets) and `should_run.py` keeps whichever one is correct today. A firing is accepted up to 45 minutes past its target, so a delayed run still sends.
+- GitHub cron is UTC-only, fires late under load, and **drops firings outright** during busy periods — 13:30 UTC is one of the busiest minutes of the day. Every slot is therefore scheduled twice, about an hour apart, and a firing counts for a slot up to 90 minutes past its target. Whichever fires first sends; the other sees the marker under `state/` and skips. If the first was dropped, the backup sends instead — an hour late, but it sends.
+- Those marker commits are also what keeps the schedule alive: GitHub disables scheduled workflows after 60 days with no repository activity, and a daily commit resets that clock. Markers older than 10 days are pruned automatically.
+- The `Record that this slot was sent` step runs only after a successful email, so a send failure deliberately leaves no marker and the backup firing retries.
 - RVOL reads low at 9:30 by construction — it's session volume so far against a 20-day average. It's most meaningful in the midday and afternoon briefs.
 - NYSE holidays are hardcoded through 2027 in `should_run.py`.
 - Every run also uploads the brief as a workflow artifact (30-day retention), so you can download it from the Actions tab if an email is ever lost.
